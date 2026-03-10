@@ -26,31 +26,37 @@ public:
     _kijelolve(false),
     _szam(0)
     {
+        // Biztosítjuk, hogy már létrehozáskor se lógjon ki
+        if (_x < 0) _x = 0;
+        if (_y < 0) _y = 0;
         if (_x > szel - _size_x) _x = szel - _size_x;
         if (_y > mag - _size_y) _y = mag - _size_y;
     }
 
     void rajzol() {
+        // Keret (háttér)
         gout << move_to(_x, _y);
-        gout << color(255, 0, 0);
-        gout << box(_size_x, _size_y);
-        gout << move_to(_x+5, _y+5);
-        gout << color(0, 0, 255);
-        gout << box(_size_x-10, _size_y-10);
-
         if (_kijelolve) {
-            gout << move_to(_x, _y);
-            gout << color(0, 0, 255);
-            gout << box(_size_x, _size_y);
-            gout << move_to(_x+5, _y+5);
-            gout << color(255, 0, 0);
-            gout << box(_size_x-10, _size_y-10);
+            gout << color(230, 160, 50); // Kijelölt keret (sötétebb narancs)
+        } else {
+            gout << color(220, 200, 100); // Sima keret (sötétebb sárga)
         }
+        gout << box(_size_x, _size_y);
 
+        // Belső rész (maga a cetli)
+        gout << move_to(_x + 3, _y + 3);
+        if (_kijelolve) {
+            gout << color(255, 200, 100); // Kijelölt belső (világos narancs)
+        } else {
+            gout << color(255, 255, 180); // Sima belső (pasztell sárga)
+        }
+        gout << box(_size_x - 6, _size_y - 6);
+
+        // Szám kirajzolása a cetli közepére
         string szoveg = to_string(_szam);
         int szoveg_szelesseg = gout.twidth(szoveg);
 
-        gout << color(255, 255, 255);
+        gout << color(40, 40, 40); // Sötétszürke szöveg
         gout << move_to(_x + _size_x/2 - szoveg_szelesseg/2, _y + _size_y/2 - gout.cascent()/2);
         gout << text(szoveg);
     }
@@ -61,7 +67,18 @@ public:
 
     void kijelol() { _kijelolve = true; }
     void visszavon() { _kijelolve = false; }
-    void mozgatas(int egerx, int egery) { _x = egerx + _dx; _y = egery + _dy; }
+
+    void mozgatas(int egerx, int egery) {
+        _x = egerx + _dx;
+        _y = egery + _dy;
+
+        // Határellenőrzés: nem engedjük kimenni az ablakból
+        if (_x < 0) _x = 0;
+        if (_y < 0) _y = 0;
+        if (_x > szel - _size_x) _x = szel - _size_x;
+        if (_y > mag - _size_y) _y = mag - _size_y;
+    }
+
     void megragad(int egerx, int egery) { _dx = _x - egerx; _dy = _y - egery; }
     void novel_szam(int ertek) { _szam += ertek; }
 };
@@ -122,7 +139,8 @@ int main()
             }
         }
 
-        gout << color(0, 0, 0) << move_to(0, 0)  << box(szel, mag);
+        // Egy szebb, sötétszürke háttér a fekete helyett, hogy a cetlik jól mutassanak rajta
+        gout << color(40, 50, 60) << move_to(0, 0)  << box(szel, mag);
         for (Cetli *c : v) {
             c->rajzol();
         }
