@@ -26,7 +26,7 @@ public:
     _kijelolve(false),
     _szam(0)
     {
-        // Biztosítjuk, hogy már létrehozáskor se lógjon ki
+       
         if (_x < 0) _x = 0;
         if (_y < 0) _y = 0;
         if (_x > szel - _size_x) _x = szel - _size_x;
@@ -34,29 +34,29 @@ public:
     }
 
     void rajzol() {
-        // Keret (háttér)
+       
         gout << move_to(_x, _y);
         if (_kijelolve) {
-            gout << color(230, 160, 50); // Kijelölt keret (sötétebb narancs)
+            gout << color(230, 160, 50);
         } else {
-            gout << color(220, 200, 100); // Sima keret (sötétebb sárga)
+            gout << color(220, 200, 100); 
         }
         gout << box(_size_x, _size_y);
 
-        // Belső rész (maga a cetli)
+       
         gout << move_to(_x + 3, _y + 3);
         if (_kijelolve) {
-            gout << color(255, 200, 100); // Kijelölt belső (világos narancs)
+            gout << color(255, 200, 100); 
         } else {
-            gout << color(255, 255, 180); // Sima belső (pasztell sárga)
+            gout << color(255, 255, 180); 
         }
         gout << box(_size_x - 6, _size_y - 6);
 
-        // Szám kirajzolása a cetli közepére
+     
         string szoveg = to_string(_szam);
         int szoveg_szelesseg = gout.twidth(szoveg);
 
-        gout << color(40, 40, 40); // Sötétszürke szöveg
+        gout << color(40, 40, 40);
         gout << move_to(_x + _size_x/2 - szoveg_szelesseg/2, _y + _size_y/2 - gout.cascent()/2);
         gout << text(szoveg);
     }
@@ -72,7 +72,7 @@ public:
         _x = egerx + _dx;
         _y = egery + _dy;
 
-        // Határellenőrzés: nem engedjük kimenni az ablakból
+        /
         if (_x < 0) _x = 0;
         if (_y < 0) _y = 0;
         if (_x > szel - _size_x) _x = szel - _size_x;
@@ -139,7 +139,7 @@ int main()
             }
         }
 
-        // Egy szebb, sötétszürke háttér a fekete helyett, hogy a cetlik jól mutassanak rajta
+       
         gout << color(40, 50, 60) << move_to(0, 0)  << box(szel, mag);
         for (Cetli *c : v) {
             c->rajzol();
