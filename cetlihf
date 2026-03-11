@@ -117,7 +117,7 @@ int main()
             }
 
             if (ev.button == btn_right) {
-                v.push_back(new Cetli(ev.pos_x, ev.pos_y, 80, 60));
+                v.push_back(new Cetli(ev.pos_x, ev.pos_y, rand() % 30 + 50, rand() % 20 + 30));
             }
 
             if (ev.button == btn_wheelup || ev.button == btn_wheeldown) {
