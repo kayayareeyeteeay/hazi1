@@ -1,0 +1,329 @@
+#include "graphics.hpp"
+#include <string>
+#include <cmath>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <ostream>
+
+using namespace genv;
+
+// Globális konstansok a játék fizikai és megjelenítési beállításaihoz
+const int ablak_szelesseg = 1200;
+const int ablak_magassag = 800;
+const int frissitesi_ido = 16;
+
+const double gravitacio = 0.01;
+const double motor_ero = 0.035;
+const double max_biztonsagos_sebesseg = 1.5;
+const double max_uzemanyag = 500.0;
+const int feher = 255;
+const int lang_r = 255, lang_g = 150, lang_b = 0;
+const int hajo_felszel = 24;
+
+// Alapvető típusok a terep és a leszállóhelyek tárolásához
+struct Pont { double x, y; };
+struct Leszallo { double x1, x2, y; };
+
+std::vector<Pont> taj;
+std::vector<Leszallo> padok;
+
+enum JatekAllapot { menu, jatek, gyozelem, vereseg };
+
+// A holdkomp fizikai viselkedését és megjelenítését kezelő osztály
+struct HoldKomp {
+private:
+    double x, y;
+    double vx, vy;
+    double uzemanyag;
+    bool gyorsit_fel, gyorsit_bal, gyorsit_jobb;
+
+public:
+    HoldKomp(double start_x, double start_y) :
+        x(start_x), y(start_y), vx(0), vy(0), uzemanyag(max_uzemanyag),
+        gyorsit_fel(false), gyorsit_bal(false), gyorsit_jobb(false) {}
+
+   // Fizikai számítások: gravitáció, motorerő és pozíció frissítése
+   void frissit(bool gomb_fel, bool gomb_bal, bool gomb_jobb) {
+        vy += gravitacio;
+
+        gyorsit_fel = gomb_fel && (uzemanyag > 0);
+        gyorsit_bal = gomb_bal && (uzemanyag > 0);
+        gyorsit_jobb = gomb_jobb && (uzemanyag > 0);
+
+        if (uzemanyag > 0) {
+            if (gomb_fel) { vy -= motor_ero; uzemanyag -= 1.0; }
+            if (gomb_bal) { vx -= motor_ero; uzemanyag -= 0.5; }
+            if (gomb_jobb) { vx += motor_ero; uzemanyag -= 0.5; }
+        }
+
+        x += vx;
+        y += vy;
+
+        // Oldalsó kimenetnél a túloldalon jön vissza
+        if (x < 25) {
+            x = ablak_szelesseg - 25;
+        }
+        else if (x > ablak_szelesseg - 25) {
+            x = 25;
+        }
+
+        // Mennyezet kezelése
+        if (y < 0) {
+            y = 0;
+            vy = 0.2;
+        }
+    }
+
+    // A komp és a hajtómű lángjainak kirajzolása koordináták alapján
+    void rajzol() {
+        gout << color(feher, feher, feher);
+        gout << move_to(x - 10, y) << line_to(x + 10, y)
+             << line_to(x + 15, y + 10) << line_to(x + 10, y + 20)
+             << line_to(x - 10, y + 20) << line_to(x - 15, y + 10)
+             << line_to(x - 10, y);
+
+        gout << move_to(x - 12, y + 15) << line_to(x - 20, y + 30);
+        gout << move_to(x + 12, y + 15) << line_to(x + 20, y + 30);
+        gout << move_to(x - 24, y + 30) << line_to(x - 16, y + 30);
+        gout << move_to(x + 16, y + 30) << line_to(x + 24, y + 30);
+
+        // Aktív hajtóművek vizuális visszajelzése
+        if (gyorsit_bal) gout << move_to(x - 15, y + 10) << color(lang_r, lang_g, lang_b) << line_to(x - 25, y + 10);
+        if (gyorsit_jobb) gout << move_to(x + 15, y + 10) << color(lang_r, lang_g, lang_b) << line_to(x + 25, y + 10);
+        if (gyorsit_fel){
+            int hossz = 30 + rand()%10;
+            gout << color(lang_r,lang_g,lang_b)
+                 << move_to(x-5,y+20)
+                 << line_to(x,y+hossz)
+                 << line_to(x+5,y+20);
+        }
+    }
+
+    double get_x() const { return x; }
+    double get_y() const { return y; }
+    double get_vy() const { return vy; }
+    double get_vx() const { return vx; }
+    double get_uzemanyag() const { return uzemanyag; }
+
+    void ujra(double start_x, double start_y) {
+        x = start_x; y = start_y; vx = 0; vy = 0; uzemanyag = max_uzemanyag;
+    }
+};
+
+// Segédfüggvény a telemetriai adatok formázott kiírásához
+std::string format_szam(double ertek) {
+    int egesz = ertek;
+    int tizedes = std::abs((ertek - egesz) * 10);
+    return std::to_string(egesz) + "." + std::to_string(tizedes);
+}
+
+// Véletlenszerű holdfelszín generálása vízszintes leszállóhelyekkel
+void general_terep() {
+    taj.clear();
+    padok.clear();
+
+    int osztas = 14;
+    double lepes_x = ablak_szelesseg / (double)osztas;
+
+    for(int i = 0; i <= osztas; i++) {
+        Pont p;
+        p.x = i * lepes_x;
+        p.y = 450 + rand() % 250;
+        taj.push_back(p);
+    }
+
+    // Fix indexeknél vízszintes padkákat alakítunk ki a zöld leszállóknak
+    int pad_indexek[] = {2, 7, 11};
+
+    for(int i = 0; i < 3; i++) {
+        int idx = pad_indexek[i];
+        taj[idx + 1].y = taj[idx].y;
+        padok.push_back({taj[idx].x, taj[idx + 1].x, taj[idx].y});
+    }
+}
+
+std::vector<Pont> csillagok;
+
+int main() {
+    gout.open(ablak_szelesseg, ablak_magassag);
+    gin.timer(frissitesi_ido);
+    srand(time(nullptr));
+
+    // Háttérben mozgó csillagmező inicializálása
+    for(int i=0;i<150;i++){
+        Pont p;
+        p.x = rand()%ablak_szelesseg;
+        p.y = rand()%ablak_magassag;
+        csillagok.push_back(p);
+    }
+
+    general_terep();
+
+    std::vector<std::string> gyozelem_uzenetek = {
+        "Gratulalok!", "A sas leszallt.", "GGWP!"
+    };
+
+    std::vector<std::string> vereseg_uzenetek = {
+        "Houston, gond van!", "WARNING, WARNING!", "FF15"
+    };
+
+    std::string aktualis_uzenet = "";
+    JatekAllapot allapot = menu;
+    HoldKomp jatekos(ablak_szelesseg / 2, 50);
+    event ev;
+
+    bool irany_fel = false, irany_bal = false, irany_jobb = false;
+    double jatek_ido = 0.0;
+
+    // Fő eseményhurok
+    while (gin >> ev) {
+        if (ev.keycode == key_escape) break;
+
+        // Billentyűgombok kezelése
+        if (ev.type == ev_key) {
+            if (ev.keycode == key_up) irany_fel = true;
+            if (ev.keycode == -key_up) irany_fel = false;
+            if (ev.keycode == key_left) irany_bal = true;
+            if (ev.keycode == -key_left) irany_bal = false;
+            if (ev.keycode == key_right) irany_jobb = true;
+            if (ev.keycode == -key_right) irany_jobb = false;
+
+            // Játék indítása vagy újraindítása a space billentyűvel
+            if (ev.keycode == key_space && allapot != jatek) {
+                allapot = jatek;
+                general_terep();
+                jatekos.ujra(ablak_szelesseg / 2, 50);
+                jatek_ido = 0.0;
+            }
+        }
+
+        // Kirajzolás és állapotfrissítés időzítőre
+        if (ev.type == ev_timer) {
+            gout << move_to(0, 0) << color(0, 0, 0) << box(ablak_szelesseg, ablak_magassag);
+
+            // Csillagok mozgatása
+            gout << color(feher, feher, feher);
+            for(auto& c : csillagok){
+                c.x -= 0.5;
+                if (c.x < 0) {
+                    c.x = ablak_szelesseg;
+                    c.y = rand() % ablak_magassag;
+                }
+                gout << move_to(c.x, c.y) << box(2,2);
+            }
+
+            if (allapot == menu) {
+                // Főmenü megjelenítése
+                int cx = ablak_szelesseg / 2;
+                int cy = ablak_magassag / 2 - 120;
+
+                // Menüben is megjelenik a kis komp grafikája
+                gout << color(feher, feher, feher);
+                gout << move_to(cx - 20, cy) << line_to(cx + 20, cy)
+                     << line_to(cx + 30, cy + 20) << line_to(cx + 20, cy + 40)
+                     << line_to(cx - 20, cy + 40) << line_to(cx - 30, cy + 20)
+                     << line_to(cx - 20, cy);
+
+                gout << color(lang_r, lang_g, lang_b);
+                gout << move_to(cx - 10, cy + 40) << line_to(cx, cy + 70) << line_to(cx + 10, cy + 40);
+
+                std::string menu_cim = "Karita Arpad Ferenc, Bevprog II. 1. beadando.";
+                std::string menu_szoveg = "Press SPACE to start!";
+
+                gout << color(feher, feher, feher);
+                gout << move_to(ablak_szelesseg / 2 - gout.twidth(menu_cim) / 2, ablak_magassag / 2 + 10) << text(menu_cim);
+                gout << move_to(ablak_szelesseg / 2 - gout.twidth(menu_szoveg) / 2, ablak_magassag / 2 + 50) << text(menu_szoveg);
+            }
+            else if (allapot == jatek) {
+                jatekos.frissit(irany_fel, irany_bal, irany_jobb);
+                jatek_ido += (double)frissitesi_ido / 1000.0;
+
+                // Hegyek és a terep kirajzolása
+                gout << color(60, 60, 60);
+                for (size_t i = 0; i < taj.size() - 1; ++i) {
+                    double dx = taj[i+1].x - taj[i].x;
+                    double dy = taj[i+1].y - taj[i].y;
+                    double m = dy / dx;
+
+                    for (int x = 0; x < dx; x++) {
+                        int hegy_y = taj[i].y + m * x;
+                        gout << move_to(taj[i].x + x, hegy_y)
+                             << box(1, ablak_magassag - hegy_y);
+                    }
+                }
+
+                // Terep körvonal és a zöld leszállópályák
+                for (size_t i = 0; i < taj.size() - 1; ++i) {
+                    gout << color(200, 200, 200);
+                    gout << move_to(taj[i].x, taj[i].y) << line_to(taj[i+1].x, taj[i+1].y);
+                }
+
+                gout << color(0, 255, 0);
+                for (const auto& p : padok) {
+                    gout << move_to(p.x1, p.y) << line_to(p.x2, p.y);
+                }
+
+                jatekos.rajzol();
+
+                // Ütközés és landolás detektálása a talaj magassága alapján
+                double hajo_x = jatekos.get_x();
+                double hajo_talp_y = jatekos.get_y() + 30;
+                double fold_y = ablak_magassag;
+
+                for (size_t i = 0; i < taj.size() - 1; ++i) {
+                    if (hajo_x >= taj[i].x && hajo_x <= taj[i+1].x) {
+                        double tav_x = taj[i+1].x - taj[i].x;
+                        double t = (hajo_x - taj[i].x) / tav_x;
+                        fold_y = taj[i].y + t * (taj[i+1].y - taj[i].y);
+                        break;
+                    }
+                }
+
+                // Telemetriai adatok kiírása a képernyőre
+                gout << color(feher, feher, feher);
+                gout << move_to(20, 20) << text("Time: ") << text(format_szam(jatek_ido)) << text(" s");
+                gout << move_to(180, 20) << text("Fuel: ") << text(format_szam(jatekos.get_uzemanyag()));
+
+                // Függőleges sebesség kijelzése
+                gout << move_to(880, 20) << text("Vertical speed: ");
+                if (jatekos.get_vy() > max_biztonsagos_sebesseg) gout << color(255, 0, 0);
+                else gout << color(0, 255, 0);
+                gout << text(format_szam(jatekos.get_vy()));
+
+                // Landolás feltételeinek ellenőrzése (helyzet és sebesség)
+                if (hajo_talp_y >= fold_y) {
+                    bool sikeres_landolas = false;
+                    for (const auto& p : padok) {
+                        if (hajo_x - hajo_felszel >= p.x1 && hajo_x + hajo_felszel <= p.x2 && std::abs(fold_y - p.y) < 2) {
+                            if (jatekos.get_vy() <= max_biztonsagos_sebesseg) {
+                                sikeres_landolas = true;
+                            }
+                        }
+                    }
+
+                    if (sikeres_landolas) {
+                        allapot = gyozelem;
+                        aktualis_uzenet = gyozelem_uzenetek[rand() % gyozelem_uzenetek.size()];
+                    } else {
+                        allapot = vereseg;
+                        aktualis_uzenet = vereseg_uzenetek[rand() % vereseg_uzenetek.size()];
+                    }
+                }
+            }
+            // Game over képernyők (győzelem/vereség)
+            else if (allapot == vereseg) {
+                gout << move_to(ablak_szelesseg / 2 - gout.twidth(aktualis_uzenet) / 2, ablak_magassag / 2 - 20)
+                     << color(255, 0, 0) << text(aktualis_uzenet);
+            }
+            else if (allapot == gyozelem) {
+                gout << move_to(ablak_szelesseg / 2 - gout.twidth(aktualis_uzenet) / 2, ablak_magassag / 2 - 20)
+                     << color(0, 255, 0) << text(aktualis_uzenet);
+            }
+
+            gout << refresh;
+        }
+    }
+
+    return 0;
+}
