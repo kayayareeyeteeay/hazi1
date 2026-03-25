@@ -1,0 +1,206 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <cmath>
+#include <cstdlib>
+#include "graphics.hpp"
+
+using namespace genv;
+using namespace std;
+
+const int szel = 800;
+const int mag = 600;
+
+class Cetli {
+public:
+    Cetli(int x, int y):
+    _x(x), _y(y),_kijelolve(false),_szam(0)
+    {}
+    virtual ~Cetli() {}
+    virtual void rajzol() = 0;
+    virtual bool folotte_van_a_kurzor(int,int) = 0;
+    void kijelol() { _kijelolve = true; }
+    void visszavon() { _kijelolve = false; }
+    bool is_kijelolve() const { return _kijelolve; }
+
+
+    void megragad(int egerx, int egery) { _dx = _x - egerx; _dy = _y - egery; }
+
+
+    virtual void novel_szam(int ertek) { _szam += ertek; }
+
+    virtual void mozgatas(int egerx, int egery) {
+        _x = egerx + _dx;
+        _y = egery + _dy;
+        _igazit();
+    }
+protected:
+    virtual void _igazit() = 0;
+    int _x,_y;
+    int _dx,_dy;
+    bool _kijelolve;
+    int _szam;
+};
+
+class Teglalap : public Cetli {
+protected:
+    int _size_x, _size_y;
+
+public:
+    Teglalap(int x, int y, int sx, int sy) :
+    Cetli(x,y),
+        _size_x(sx), _size_y(sy)
+    {
+        _igazit();
+    }
+
+    virtual void _igazit() {
+        if (_x < 0) _x = 0;
+        if (_y < 0) _y = 0;
+        if (_x > szel - _size_x) _x = szel - _size_x;
+        if (_y > mag - _size_y) _y = mag - _size_y;
+    }
+
+    virtual ~Teglalap() {}
+
+    virtual void rajzol() {
+        gout << move_to(_x, _y);
+        if (_kijelolve) gout << color(230, 160, 50);
+        else gout << color(220, 200, 100);
+        gout << box(_size_x, _size_y);
+
+        gout << move_to(_x + 3, _y + 3);
+        if (_kijelolve) gout << color(255, 200, 100);
+        else gout << color(255, 255, 180);
+        gout << box(_size_x - 6, _size_y - 6);
+
+        string szoveg = to_string(_szam);
+        gout << color(40, 40, 40);
+        gout << move_to(_x + _size_x / 2 - gout.twidth(szoveg) / 2, _y + _size_y / 2 - (gout.cascent() + gout.cdescent()) / 2);
+        gout << text(szoveg);
+    }
+
+    virtual bool folotte_van_a_kurzor(int egerx, int egery) {
+        return egerx >= _x && egerx <= _size_x + _x && egery >= _y && egery <= _y + _size_y;
+    }
+
+
+    void novel_szam(int ertek) override {
+        _szam += ertek * 1;
+    }
+};
+
+class Kor : public Cetli {
+    int _r;
+public:
+    Kor(int x, int y, int r) : Cetli(x, y), _r(r) {
+        _igazit();
+    }
+
+    void rajzol() override {
+        for (int i = -_r; i <= _r; i++) {
+            for (int j = -_r; j <= _r; j++) {
+                if (i * i + j * j <= _r * _r) {
+                    gout << move_to(_x + i, _y + j);
+                    if (i * i + j * j <= (_r - 5) * (_r - 5)) {
+                        if (_kijelolve) gout << color(255, 200, 100);
+                        else gout << color(255, 255, 180);
+                    } else {
+                        if (_kijelolve) gout << color(230, 160, 50);
+                        else gout << color(220, 200, 100);
+                    }
+                    gout << dot;
+                }
+            }
+        }
+
+        string szoveg = to_string(_szam);
+        gout << color(40, 40, 40);
+        gout << move_to(_x - gout.twidth(szoveg) / 2, _y - (gout.cascent() + gout.cdescent()) / 2);
+        gout << text(szoveg);
+    }
+
+    bool folotte_van_a_kurzor(int egerx, int egery) override {
+        return (egerx - _x) * (egerx - _x) + (egery - _y) * (egery - _y) <= _r * _r;
+    }
+
+    void _igazit() override {
+        if (_x < _r) _x = _r;
+        if (_y < _r) _y = _r;
+        if (_x > szel - _r) _x = szel - _r;
+        if (_y > mag - _r) _y = mag - _r;
+    }
+
+    void mozgatas(int egerx, int egery) override {
+        _x = egerx + _dx;
+        _y = egery + _dy;
+        _igazit();
+    }
+
+
+    void novel_szam(int ertek) override {
+        _szam += ertek * 5;
+    }
+};
+
+int main() {
+    vector<Cetli*> v;
+    gout.open(szel, mag);
+    gout << font("LiberationSans-Regular.ttf", 20);
+
+    v.push_back(new Teglalap(szel / 2 - 40, mag / 2 - 30, 80, 60));
+
+    event ev;
+    Cetli* aktualis_kijelolt = nullptr;
+
+    while (gin >> ev) {
+        if (ev.type == ev_mouse) {
+            if (ev.button == btn_left) {
+                bool talalt = false;
+                for (int i = (int)v.size() - 1; i >= 0; i--) {
+                    if (v[i]->folotte_van_a_kurzor(ev.pos_x, ev.pos_y)) {
+                        for (Cetli* c : v) c->visszavon();
+                        v[i]->kijelol();
+                        v[i]->megragad(ev.pos_x, ev.pos_y);
+                        aktualis_kijelolt = v[i];
+                        talalt = true;
+                        break;
+                    }
+                }
+                if (!talalt) {
+                    for (Cetli* c : v) c->visszavon();
+                    aktualis_kijelolt = nullptr;
+                }
+            }
+            if (ev.button == btn_right) {
+                v.push_back(new Teglalap(ev.pos_x, ev.pos_y, rand() % 30 + 50, rand() % 20 + 30));
+            }
+            if (ev.button == btn_middle) {
+                v.push_back(new Kor(ev.pos_x, ev.pos_y, rand() % 40 + 30));
+            }
+            if (ev.button == btn_wheelup || ev.button == btn_wheeldown) {
+                for (Cetli* c : v) {
+                    if (c->is_kijelolve()) {
+                        if (ev.button == btn_wheelup) c->novel_szam(1);
+                        if (ev.button == btn_wheeldown) c->novel_szam(-1);
+                    }
+                }
+            }
+            if (ev.button == 0 && aktualis_kijelolt != nullptr) {
+                aktualis_kijelolt->mozgatas(ev.pos_x, ev.pos_y);
+            }
+            if (ev.button == -btn_left) {
+                aktualis_kijelolt = nullptr;
+            }
+        }
+
+        gout << color(40, 50, 60) << move_to(0, 0) << box(szel, mag);
+        for (Cetli *c : v) {
+            c->rajzol();
+        }
+        gout << refresh;
+    }
+
+    for (Cetli* c : v) delete c;
+    return 0;
+}
